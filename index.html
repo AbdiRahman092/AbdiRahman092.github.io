@@ -121,6 +121,7 @@
     <button class="tbtn hide-mobile" data-tool="pan" title="Pan (H / hold space)">✋ Pan</button>
     <div class="toolopts" id="toolopts"></div>
     <div class="spacer"></div>
+    <span class="pill" id="syncPill" title="Cloud sync status">☁ …</span>
     <button class="tbtn ghost" id="undoBtn" title="Undo (⌘Z)">↶</button>
     <button class="tbtn ghost" id="redoBtn" title="Redo (⌘⇧Z)">↷</button>
     <label class="chk hide-mobile"><input type="checkbox" id="alignChk" checked> Align</label>
@@ -456,7 +457,8 @@ function buildDefault(){
 /* ============================================================ PERSIST */
 function serialize(){return JSON.stringify({
   floor:[...S.floor],areas:S.areas,walls:S.walls,objects:S.objects,cam},null,0);}
-function save(){try{localStorage.setItem('gymDesigner',serialize());}catch(e){}}
+function save(){try{localStorage.setItem('gymDesigner',serialize());}catch(e){}
+  if(typeof cloudPushSoon==='function')cloudPushSoon();}
 function load(json){
   S=blankScene();json.floor.forEach(k=>S.floor.add(k));
   S.areas=json.areas||[];S.walls=json.walls||[];S.objects=json.objects||[];
@@ -529,6 +531,42 @@ function openPanel(side){closePanels();document.getElementById(side).classList.a
 function closePanels(){document.getElementById('left').classList.remove('open');
   document.getElementById('right').classList.remove('open');
   document.getElementById('scrim').classList.remove('show');}
+
+/* ============================================================ CLOUD SYNC (Supabase) */
+const SUPA_URL='https://rdienquzpfwfdgxfkzmq.supabase.co';
+const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkaWVucXV6cGZ3ZmRneGZrem1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MTY0NDksImV4cCI6MjA5Mzk5MjQ0OX0.0t1vLjbkMfSSSIay58ZJsko6A1rpkc3t0bchinlClTU';
+let slug=getSlug();
+let cloudTimer=null, skipNextPush=false;
+function randSlug(){const a=new Uint8Array(12);
+  (globalThis.crypto&&crypto.getRandomValues)?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.random()*256);
+  return [...a].map(b=>(b&255).toString(16).padStart(2,'0')).join('').slice(0,20);}
+function getSlug(){const h=(typeof location!=='undefined'&&location.hash)||'';
+  const m=h.match(/s=([A-Za-z0-9_-]{6,64})/);
+  if(m){try{localStorage.setItem('gymSlug',m[1]);}catch(e){}return m[1];}
+  let s=null;try{s=localStorage.getItem('gymSlug');}catch(e){}
+  if(!s){s=randSlug();try{localStorage.setItem('gymSlug',s);}catch(e){}}
+  try{history.replaceState(null,'','#s='+s);}catch(e){}return s;}
+function setSync(state){const el=document.getElementById('syncPill');if(!el)return;
+  const map={synced:['☁ Synced','#56c596'],saving:['☁ Saving…','#ffce4f'],
+    local:['☁ Setup needed','#ffce4f'],off:['☁ Offline','#9aa3af']};
+  const [t,c]=map[state]||map.off;el.textContent=t;el.style.color=c;el.dataset.state=state;}
+async function rpc(fn,body){
+  const r=await fetch(`${SUPA_URL}/rest/v1/rpc/${fn}`,{method:'POST',
+    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':'application/json',Prefer:'return=representation'},
+    body:JSON.stringify(body)});
+  if(!r.ok){const e=new Error('rpc '+r.status);e.status=r.status;throw e;}
+  const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():null;}
+async function cloudLoad(){
+  try{const data=await rpc('gym_load',{p_slug:slug});
+    if(data&&data.objects){skipNextPush=true;load(data);resetHistory();fitView();refreshUI();draw();setSync('synced');}
+    else{setSync('synced');cloudPushSoon();}      // first time on this slug -> seed the cloud
+  }catch(e){setSync(e.status===404?'local':'off');}}
+function cloudPushSoon(){if(skipNextPush){skipNextPush=false;return;}
+  clearTimeout(cloudTimer);cloudTimer=setTimeout(cloudPush,1400);}
+async function cloudPush(){if(!slug)return;
+  try{const payload=JSON.parse(serialize());delete payload.cam;
+    setSync('saving');await rpc('gym_save',{p_slug:slug,p_data:payload});setSync('synced');}
+  catch(e){setSync(e.status===404?'local':'off');}}
 
 /* ============================================================ TRANSFORM */
 function W(){return cv.clientWidth;} function H(){return cv.clientHeight;}
@@ -1061,6 +1099,7 @@ window.addEventListener('resize',()=>{resize();draw();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{resize();fitView();},200));
 init();resize();buildPalette();setTool('select');fitView();resetHistory();
 toggleAlign(align);updateHistBtns();refreshUI();draw();
+setSync('off');cloudLoad();   // pull latest from cloud, then keep in sync
 </script>
 </body>
 </html>
