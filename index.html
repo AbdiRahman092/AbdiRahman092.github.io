@@ -1114,6 +1114,9 @@ function renderTo(g,scale,ox,oy){ // ox,oy world coords at canvas 0,0
 /* ============================================================ BOOT */
 window.addEventListener('resize',()=>{resize();draw();});
 window.addEventListener('orientationchange',()=>setTimeout(()=>{resize();fitView();},200));
+// when you return to this device/tab, pull the latest (unless local edits are still pending)
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible' && !cloudTimer && !drag && typeof cloudLoad==='function') cloudLoad();});
 init();resize();buildPalette();setTool('select');fitView();resetHistory();
 toggleAlign(align);updateHistBtns();refreshUI();draw();
 setSync('off');cloudLoad();   // pull latest from cloud, then keep in sync
