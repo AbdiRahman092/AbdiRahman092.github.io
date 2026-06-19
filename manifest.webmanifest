@@ -1,0 +1,13 @@
+{
+  "name": "Gym Designer",
+  "short_name": "Gym Designer",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1d2025",
+  "theme_color": "#1d2025",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
