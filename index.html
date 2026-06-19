@@ -121,7 +121,7 @@
     <button class="tbtn hide-mobile" data-tool="pan" title="Pan (H / hold space)">✋ Pan</button>
     <div class="toolopts" id="toolopts"></div>
     <div class="spacer"></div>
-    <span class="pill" id="syncPill" title="Cloud sync status">☁ …</span>
+    <span class="pill" id="syncPill" title="Tap to view / set sync code" style="cursor:pointer">☁ …</span>
     <button class="tbtn ghost" id="undoBtn" title="Undo (⌘Z)">↶</button>
     <button class="tbtn ghost" id="redoBtn" title="Redo (⌘⇧Z)">↷</button>
     <label class="chk hide-mobile"><input type="checkbox" id="alignChk" checked> Align</label>
@@ -567,6 +567,22 @@ async function cloudPush(){if(!slug)return;
   try{const payload=JSON.parse(serialize());delete payload.cam;
     setSync('saving');await rpc('gym_save',{p_slug:slug,p_data:payload});setSync('synced');}
   catch(e){setSync(e.status===404?'local':'off');}}
+/* tap the cloud pill to view / set the shared sync code that links devices */
+function syncMenu(){
+  const v=prompt(
+    'SYNC CODE — use the SAME code on every device to link them.\n\n'+
+    '• On your main device: keep this code, then copy it.\n'+
+    '• On other devices: paste this exact code.\n\n'+
+    'Loads that layout from the cloud (your current one uploads if the code is new).',
+    slug||'');
+  if(v==null)return;
+  const ns=v.trim();
+  if(!ns||ns===slug)return;
+  slug=ns;
+  try{localStorage.setItem('gymSlug',ns);}catch(e){}
+  try{history.replaceState(null,'','#s='+ns);}catch(e){}
+  setSync('off');cloudLoad();
+}
 
 /* ============================================================ TRANSFORM */
 function W(){return cv.clientWidth;} function H(){return cv.clientHeight;}
@@ -1037,6 +1053,7 @@ $('snapChk').onchange=()=>{};
 $('gridChk').onchange=draw;
 $('alignChk').onchange=e=>toggleAlign(e.target.checked);
 $('undoBtn').onclick=undo; $('redoBtn').onclick=redo;
+$('syncPill').onclick=syncMenu;
 $('zoomIn').onclick=()=>{cam.zoom=Math.min(220,cam.zoom*1.2);updateZoomLabel();draw();};
 $('zoomOut').onclick=()=>{cam.zoom=Math.max(8,cam.zoom/1.2);updateZoomLabel();draw();};
 $('fitBtn').onclick=fitView;
