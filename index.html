@@ -335,6 +335,18 @@ const DR = {
   door(c,o){const w=o.w,h=o.h;c.strokeStyle=o.fill;c.lineWidth=Math.min(.06,h);
     c.beginPath();c.moveTo(-w/2,0);c.lineTo(w/2,0);c.stroke();
     c.lineWidth=.025;c.beginPath();c.arc(-w/2,0,w,0,-Math.PI/2,true);c.stroke();},
+  // composable shape: o.parts = [{t:'rect',x,y,w,h,r,fill,stroke,lw},{t:'circle',x,y,r,...},{t:'line',x,y,x2,y2,lw,stroke}]
+  // fill:'shade' uses shade(o.fill,amt); fill:'none' = no fill. coords in metres, centre origin.
+  parts(c,o){if(!o.parts||!o.parts.length)return DR.box(c,o);
+    o.parts.forEach(p=>{
+      c.lineWidth=p.lw||.03;c.strokeStyle=p.stroke||o.stroke||'#2a2a2a';
+      c.fillStyle=p.fill==='shade'?shade(o.fill,p.amt==null?-.3:p.amt):(p.fill==='base'||p.fill==null?o.fill:p.fill);
+      if(p.t==='rect'){rr(c,(p.x||0)-(p.w||.2)/2,(p.y||0)-(p.h||.2)/2,p.w||.2,p.h||.2,p.r==null?.04:p.r);
+        if(p.fill!=='none')c.fill();if(p.stroke||p.fill==='none')c.stroke();}
+      else if(p.t==='circle'){c.beginPath();c.arc(p.x||0,p.y||0,p.r||.2,0,7);
+        if(p.fill!=='none')c.fill();if(p.stroke||p.fill==='none')c.stroke();}
+      else if(p.t==='line'){c.beginPath();c.moveTo(p.x||0,p.y||0);c.lineTo(p.x2||0,p.y2||0);c.stroke();}
+    });},
 };
 
 /* ============================================================ CATALOG */
@@ -401,7 +413,10 @@ let pending=null;      // catalog item to place
 let sel=[];            // array of {kind,id}
 let uid=1; const nid=()=>uid++;
 
-function blankScene(){return {floor:new Set(),areas:[],walls:[],objects:[]};}
+function blankScene(){return {floor:new Set(),areas:[],walls:[],objects:[],palette:[]};}
+/* register custom (data-driven) palette items so they place + draw correctly */
+function registerPalette(){(S.palette||[]).forEach(g=>g.items.forEach(it=>{it.cat=g.cat;if(it.fill==null)it.fill=g.color;TYPEMAP[it.type]=it;}));}
+function effectiveCatalog(){return CATALOG.concat(S.palette||[]);}
 
 /* ---- default gym ---- */
 function buildDefault(){
@@ -456,13 +471,14 @@ function buildDefault(){
 
 /* ============================================================ PERSIST */
 function serialize(){return JSON.stringify({
-  floor:[...S.floor],areas:S.areas,walls:S.walls,objects:S.objects,cam},null,0);}
+  floor:[...S.floor],areas:S.areas,walls:S.walls,objects:S.objects,palette:S.palette||[],cam},null,0);}
 function save(){try{localStorage.setItem('gymDesigner',serialize());}catch(e){}
   if(typeof cloudPushSoon==='function')cloudPushSoon();}
 function load(json){
   S=blankScene();json.floor.forEach(k=>S.floor.add(k));
-  S.areas=json.areas||[];S.walls=json.walls||[];S.objects=json.objects||[];
+  S.areas=json.areas||[];S.walls=json.walls||[];S.objects=json.objects||[];S.palette=json.palette||[];
   (S.areas.concat(S.walls,S.objects)).forEach(o=>uid=Math.max(uid,o.id+1));
+  registerPalette();if(typeof buildPalette==='function')buildPalette();
   if(json.cam)cam=json.cam;sel=[];}
 function init(){
   const raw=localStorage.getItem('gymDesigner');
@@ -518,6 +534,7 @@ function applyAlign(item,cx,cy){
 function placeCenter(it){const off=(addOffset++%6)*0.35;
   const o={id:nid(),kind:'object',type:it.type,shape:it.shape,name:it.name,
     w:it.w,h:it.h,x:snap(cam.x+off),y:snap(cam.y+off),rot:0,fill:it.fill,stroke:'#2a2a2a',locked:false};
+  if(it.parts)o.parts=JSON.parse(JSON.stringify(it.parts));
   S.objects.push(o);sel=[{kind:'object',id:o.id}];setTool('select');
   commit();refreshUI();draw();closePanels();}
 
@@ -537,6 +554,18 @@ const SUPA_URL='https://rdienquzpfwfdgxfkzmq.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJkaWVucXV6cGZ3ZmRneGZrem1xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0MTY0NDksImV4cCI6MjA5Mzk5MjQ0OX0.0t1vLjbkMfSSSIay58ZJsko6A1rpkc3t0bchinlClTU';
 let slug=getSlug();
 let cloudTimer=null, skipNextPush=false;
+let lastRemoteSig=null, pollTimer=null;
+function remoteSig(d){try{return JSON.stringify([d.objects,d.areas,d.walls,d.floor,d.palette||[]]);}catch(e){return null;}}
+/* live poll: pull remote layout every ~2s so edits made elsewhere (e.g. via the CLI)
+   appear in this open tab automatically. Skips while dragging or while a local push is pending. */
+async function cloudPoll(){
+  if(!slug||drag||cloudTimer||document.visibilityState!=='visible')return;
+  try{const data=await rpc('gym_load',{p_slug:slug});
+    if(!data||!data.objects)return;
+    const sig=remoteSig(data);if(sig===lastRemoteSig)return;
+    lastRemoteSig=sig;skipNextPush=true;
+    load(data);resetHistory();refreshUI();draw();setSync('synced');
+  }catch(e){}}
 function randSlug(){const a=new Uint8Array(12);
   (globalThis.crypto&&crypto.getRandomValues)?crypto.getRandomValues(a):a.forEach((_,i)=>a[i]=Math.random()*256);
   return [...a].map(b=>(b&255).toString(16).padStart(2,'0')).join('').slice(0,20);}
@@ -558,13 +587,14 @@ async function rpc(fn,body){
   const ct=r.headers.get('content-type')||'';return ct.includes('json')?r.json():null;}
 async function cloudLoad(){
   try{const data=await rpc('gym_load',{p_slug:slug});
-    if(data&&data.objects){skipNextPush=true;load(data);resetHistory();fitView();refreshUI();draw();setSync('synced');}
+    if(data&&data.objects){skipNextPush=true;lastRemoteSig=remoteSig(data);load(data);resetHistory();fitView();refreshUI();draw();setSync('synced');}
     else{setSync('synced');cloudPushSoon();}      // first time on this slug -> seed the cloud
   }catch(e){setSync(e.status===404?'local':'off');}}
 function cloudPushSoon(){if(skipNextPush){skipNextPush=false;return;}
   clearTimeout(cloudTimer);cloudTimer=setTimeout(cloudPush,1400);}
 async function cloudPush(){if(!slug)return;
   try{const payload=JSON.parse(serialize());delete payload.cam;
+    lastRemoteSig=remoteSig(payload);
     setSync('saving');await rpc('gym_save',{p_slug:slug,p_data:payload});setSync('synced');}
   catch(e){setSync(e.status===404?'local':'off');}}
 /* tap the cloud pill to view / set the shared sync code that links devices */
@@ -889,6 +919,7 @@ cv.addEventListener('wheel',e=>{e.preventDefault();
 function placeAt(x,y,keep){const t=pending;
   const o={id:nid(),kind:'object',type:t.type,shape:t.shape,name:t.name,
     w:t.w,h:t.h,x,y,rot:0,fill:t.fill,stroke:'#2a2a2a',locked:false};
+  if(t.parts)o.parts=JSON.parse(JSON.stringify(t.parts));
   S.objects.push(o);sel=[{kind:'object',id:o.id}];
   if(!keep){pending=null;document.querySelectorAll('.pal').forEach(p=>p.classList.remove('active'));}
   commit();refreshUI();draw();}
@@ -942,7 +973,7 @@ function zorder(dir,toEnd){selItems().forEach(o=>{const arr=o.kind==='object'?S.
 
 /* ============================================================ UI: PALETTE */
 function buildPalette(){const root=document.getElementById('palette');root.innerHTML='';
-  CATALOG.forEach(g=>{const h=document.createElement('div');h.className='cat';h.textContent=g.cat;root.appendChild(h);
+  effectiveCatalog().forEach(g=>{const h=document.createElement('div');h.className='cat';h.textContent=g.cat;root.appendChild(h);
     const grid=document.createElement('div');grid.className='grid';
     g.items.forEach(it=>{const b=document.createElement('div');b.className='pal';b.dataset.type=it.type;
       b.innerHTML=`<canvas class="ic" width="68" height="68"></canvas>${it.name}`;
@@ -1120,6 +1151,7 @@ document.addEventListener('visibilitychange',()=>{
 init();resize();buildPalette();setTool('select');fitView();resetHistory();
 toggleAlign(align);updateHistBtns();refreshUI();draw();
 setSync('off');cloudLoad();   // pull latest from cloud, then keep in sync
+pollTimer=setInterval(cloudPoll,2000);   // live auto-refresh from cloud (~2s)
 </script>
 </body>
 </html>
