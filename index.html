@@ -414,6 +414,16 @@ const CATALOG = [
    {type:'plchest',name:'Plate-Loaded Chest Press',w:1.3,h:1.4,shape:'machine',fill:'#e2624c'},
    {type:'hacksquat',name:'Hack Squat',w:1.4,h:1.8,shape:'legpress',fill:'#e2624c'},
    {type:'legpress45',name:'Leg Press 45°',w:1.4,h:2.0,shape:'legpress',fill:'#e2624c'},
+   {type:'cablestation',name:'Cable Station',w:2.5,h:1.9,shape:'parts',fill:'#7a86d6',parts:[
+     {t:'rect',x:0,y:0,w:2.2,h:1.7,r:0.06,fill:'none',stroke:'#2a2a2a',lw:0.05},
+     {t:'rect',x:-0.32,y:0,w:0.42,h:1.15,r:0.04,fill:'shade',amt:-0.35},
+     {t:'rect',x:0.32,y:0,w:0.42,h:1.15,r:0.04,fill:'shade',amt:-0.35},
+     {t:'rect',x:0,y:-0.78,w:1.7,h:0.13,r:0.04,fill:'shade',amt:0.12},
+     {t:'rect',x:0,y:0.78,w:1.5,h:0.15,r:0.04,fill:'shade',amt:0.12},
+     {t:'rect',x:0.98,y:0,w:0.15,h:1.4,r:0.03,fill:'base'},
+     {t:'rect',x:-0.95,y:0,w:0.8,h:0.38,r:0.05,fill:'shade',amt:-0.22},
+     {t:'rect',x:-1.0,y:0.48,w:0.42,h:0.2,fill:'shade',amt:-0.3}
+   ]},
  ]},
 ];
 const TYPEMAP={};CATALOG.forEach(g=>g.items.forEach(it=>{it.cat=g.cat;it.fill=it.fill||g.color;TYPEMAP[it.type]=it;}));
@@ -999,7 +1009,7 @@ function buildPalette(){const root=document.getElementById('palette');root.inner
 function drawIcon(c,it){const g=c.getContext('2d');const sz=68;const pad=8;
   const mw=it.w,mh=it.h;const scale=Math.min((sz-pad*2)/mw,(sz-pad*2)/mh,30);
   g.clearRect(0,0,sz,sz);g.save();g.translate(sz/2,sz/2);g.scale(scale,scale);g.lineJoin='round';
-  (DR[it.shape]||DR.box)(g,{w:mw,h:mh,fill:it.fill,stroke:'#222',rot:0});g.restore();}
+  (DR[it.shape]||DR.box)(g,{w:mw,h:mh,fill:it.fill,stroke:'#222',rot:0,parts:it.parts});g.restore();}
 
 /* ============================================================ UI: TOOL OPTS */
 function renderToolOpts(){const el=document.getElementById('toolopts');el.innerHTML='';
