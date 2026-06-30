@@ -338,14 +338,17 @@ const DR = {
   // composable shape: o.parts = [{t:'rect',x,y,w,h,r,fill,stroke,lw},{t:'circle',x,y,r,...},{t:'line',x,y,x2,y2,lw,stroke}]
   // fill:'shade' uses shade(o.fill,amt); fill:'none' = no fill. coords in metres, centre origin.
   parts(c,o){if(!o.parts||!o.parts.length)return DR.box(c,o);
+    // parts are authored at the design size (o.pw x o.ph); scale to the actual o.w x o.h so it resizes
+    const sx=o.pw?o.w/o.pw:1, sy=o.ph?o.h/o.ph:1, sl=(sx+sy)/2;
     o.parts.forEach(p=>{
-      c.lineWidth=p.lw||.03;c.strokeStyle=p.stroke||o.stroke||'#2a2a2a';
+      c.lineWidth=(p.lw||.03)*sl;c.strokeStyle=p.stroke||o.stroke||'#2a2a2a';
       c.fillStyle=p.fill==='shade'?shade(o.fill,p.amt==null?-.3:p.amt):(p.fill==='base'||p.fill==null?o.fill:p.fill);
-      if(p.t==='rect'){rr(c,(p.x||0)-(p.w||.2)/2,(p.y||0)-(p.h||.2)/2,p.w||.2,p.h||.2,p.r==null?.04:p.r);
+      const X=(p.x||0)*sx, Y=(p.y||0)*sy;
+      if(p.t==='rect'){const pw=(p.w||.2)*sx,ph=(p.h||.2)*sy;rr(c,X-pw/2,Y-ph/2,pw,ph,(p.r==null?.04:p.r)*sl);
         if(p.fill!=='none')c.fill();if(p.stroke||p.fill==='none')c.stroke();}
-      else if(p.t==='circle'){c.beginPath();c.arc(p.x||0,p.y||0,p.r||.2,0,7);
+      else if(p.t==='circle'){c.beginPath();c.arc(X,Y,(p.r||.2)*sl,0,7);
         if(p.fill!=='none')c.fill();if(p.stroke||p.fill==='none')c.stroke();}
-      else if(p.t==='line'){c.beginPath();c.moveTo(p.x||0,p.y||0);c.lineTo(p.x2||0,p.y2||0);c.stroke();}
+      else if(p.t==='line'){c.beginPath();c.moveTo(X,Y);c.lineTo((p.x2||0)*sx,(p.y2||0)*sy);c.stroke();}
     });},
 };
 
@@ -414,7 +417,7 @@ const CATALOG = [
    {type:'plchest',name:'Plate-Loaded Chest Press',w:1.3,h:1.4,shape:'machine',fill:'#e2624c'},
    {type:'hacksquat',name:'Hack Squat',w:1.4,h:1.8,shape:'legpress',fill:'#e2624c'},
    {type:'legpress45',name:'Leg Press 45°',w:1.4,h:2.0,shape:'legpress',fill:'#e2624c'},
-   {type:'cablestation',name:'Cable Station',w:2.5,h:1.9,shape:'parts',fill:'#7a86d6',parts:[
+   {type:'cablestation',name:'Cable Station',w:2.5,h:1.9,pw:2.5,ph:1.9,shape:'parts',fill:'#7a86d6',parts:[
      {t:'rect',x:0,y:0,w:2.2,h:1.7,r:0.06,fill:'none',stroke:'#2a2a2a',lw:0.05},
      {t:'rect',x:-0.32,y:0,w:0.42,h:1.15,r:0.04,fill:'shade',amt:-0.35},
      {t:'rect',x:0.32,y:0,w:0.42,h:1.15,r:0.04,fill:'shade',amt:-0.35},
@@ -424,7 +427,7 @@ const CATALOG = [
      {t:'rect',x:-0.95,y:0,w:0.8,h:0.38,r:0.05,fill:'shade',amt:-0.22},
      {t:'rect',x:-1.0,y:0.48,w:0.42,h:0.2,fill:'shade',amt:-0.3}
    ]},
-   {type:'benchpress',name:'Olympic Bench Press',w:1.6,h:1.9,shape:'parts',fill:'#e2624c',parts:[
+   {type:'benchpress',name:'Olympic Bench Press',w:1.6,h:1.9,pw:1.6,ph:1.9,shape:'parts',fill:'#e2624c',parts:[
      {t:'rect',x:0,y:0.1,w:0.42,h:1.5,r:0.06,fill:'shade',amt:-0.15},
      {t:'rect',x:0,y:0.72,w:0.5,h:0.4,r:0.06,fill:'base'},
      {t:'rect',x:-0.48,y:-0.65,w:0.12,h:0.45,r:0.02,fill:'shade',amt:-0.3},
@@ -433,7 +436,7 @@ const CATALOG = [
      {t:'circle',x:-0.66,y:-0.7,r:0.16,fill:'shade',amt:-0.4},
      {t:'circle',x:0.66,y:-0.7,r:0.16,fill:'shade',amt:-0.4}
    ]},
-   {type:'lowrow',name:'Plate-Loaded Low Row',w:1.7,h:1.1,shape:'parts',fill:'#e2624c',parts:[
+   {type:'lowrow',name:'Plate-Loaded Low Row',w:1.7,h:1.1,pw:1.7,ph:1.1,shape:'parts',fill:'#e2624c',parts:[
      {t:'rect',x:-0.25,y:0,w:0.95,h:0.5,r:0.06,fill:'shade',amt:-0.2},
      {t:'rect',x:0.15,y:-0.32,w:0.5,h:0.3,r:0.05,fill:'shade',amt:-0.08},
      {t:'circle',x:0.6,y:0.12,r:0.3,fill:'shade',amt:-0.35},
@@ -576,6 +579,7 @@ function placeCenter(it){const off=(addOffset++%6)*0.35;
   const o={id:nid(),kind:'object',type:it.type,shape:it.shape,name:it.name,
     w:it.w,h:it.h,x:snap(cam.x+off),y:snap(cam.y+off),rot:0,fill:it.fill,stroke:'#2a2a2a',locked:false};
   if(it.parts)o.parts=JSON.parse(JSON.stringify(it.parts));
+  if(it.pw)o.pw=it.pw; if(it.ph)o.ph=it.ph;
   S.objects.push(o);sel=[{kind:'object',id:o.id}];setTool('select');
   commit();refreshUI();draw();closePanels();}
 
@@ -961,6 +965,7 @@ function placeAt(x,y,keep){const t=pending;
   const o={id:nid(),kind:'object',type:t.type,shape:t.shape,name:t.name,
     w:t.w,h:t.h,x,y,rot:0,fill:t.fill,stroke:'#2a2a2a',locked:false};
   if(t.parts)o.parts=JSON.parse(JSON.stringify(t.parts));
+  if(t.pw)o.pw=t.pw; if(t.ph)o.ph=t.ph;
   S.objects.push(o);sel=[{kind:'object',id:o.id}];
   if(!keep){pending=null;document.querySelectorAll('.pal').forEach(p=>p.classList.remove('active'));}
   commit();refreshUI();draw();}
