@@ -191,7 +191,8 @@
 <script>
 "use strict";
 /* ============================================================ CONSTANTS */
-const GRIDM = 0.5;       // floor cell size in metres
+const GRIDM = 0.5;       // grid-line / object-snap reference (metres)
+let FLOORM = 0.5;        // floor paint cell size (per layout, configurable for finer control)
 const SNAPM = 0.25;      // object snap step
 const MINM  = 0.1;       // min object size
 const cv = document.getElementById('cv');
@@ -468,6 +469,7 @@ function effectiveCatalog(){return CATALOG.concat(S.palette||[]);}
 
 /* ---- default gym ---- */
 function buildDefault(){
+  FLOORM=0.5;
   const s=blankScene();
   // floor: 20m x 12m rectangle on 0.5 grid + stair notch top-right
   for(let cx=0;cx<40;cx++)for(let ry=0;ry<24;ry++) s.floor.add(cx+'_'+ry);
@@ -519,11 +521,11 @@ function buildDefault(){
 
 /* ============================================================ PERSIST */
 function serialize(){return JSON.stringify({
-  floor:[...S.floor],areas:S.areas,walls:S.walls,objects:S.objects,palette:S.palette||[],cam},null,0);}
+  floor:[...S.floor],areas:S.areas,walls:S.walls,objects:S.objects,palette:S.palette||[],floorM:FLOORM,cam},null,0);}
 function save(){try{localStorage.setItem('gymDesigner',serialize());}catch(e){}
   if(typeof cloudPushSoon==='function')cloudPushSoon();}
 function load(json){
-  S=blankScene();json.floor.forEach(k=>S.floor.add(k));
+  S=blankScene();FLOORM=+json.floorM||0.5;json.floor.forEach(k=>S.floor.add(k));
   S.areas=json.areas||[];S.walls=json.walls||[];S.objects=json.objects||[];S.palette=json.palette||[];
   (S.areas.concat(S.walls,S.objects)).forEach(o=>uid=Math.max(uid,o.id+1));
   registerPalette();if(typeof buildPalette==='function')buildPalette();
@@ -704,16 +706,16 @@ function drawGrid(){
 function drawFloor(){
   if(!S.floor.size)return;const z=cam.zoom;
   ctx.fillStyle='#ffffff';
-  for(const k of S.floor){const [cx,ry]=k.split('_').map(Number);const [sx,sy]=w2s(cx*GRIDM,ry*GRIDM);
-    ctx.fillRect(sx,sy,GRIDM*z+1,GRIDM*z+1);}
+  for(const k of S.floor){const [cx,ry]=k.split('_').map(Number);const [sx,sy]=w2s(cx*FLOORM,ry*FLOORM);
+    ctx.fillRect(sx,sy,FLOORM*z+1,FLOORM*z+1);}
   // boundary outline
   ctx.strokeStyle='#9a9488';ctx.lineWidth=2;ctx.beginPath();
   for(const k of S.floor){const [cx,ry]=k.split('_').map(Number);
-    const x=cx*GRIDM,y=ry*GRIDM;
-    if(!S.floor.has((cx)+'_'+(ry-1))){const a=w2s(x,y),b=w2s(x+GRIDM,y);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
-    if(!S.floor.has((cx)+'_'+(ry+1))){const a=w2s(x,y+GRIDM),b=w2s(x+GRIDM,y+GRIDM);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
-    if(!S.floor.has((cx-1)+'_'+(ry))){const a=w2s(x,y),b=w2s(x,y+GRIDM);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
-    if(!S.floor.has((cx+1)+'_'+(ry))){const a=w2s(x+GRIDM,y),b=w2s(x+GRIDM,y+GRIDM);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}}
+    const x=cx*FLOORM,y=ry*FLOORM;
+    if(!S.floor.has((cx)+'_'+(ry-1))){const a=w2s(x,y),b=w2s(x+FLOORM,y);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
+    if(!S.floor.has((cx)+'_'+(ry+1))){const a=w2s(x,y+FLOORM),b=w2s(x+FLOORM,y+FLOORM);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
+    if(!S.floor.has((cx-1)+'_'+(ry))){const a=w2s(x,y),b=w2s(x,y+FLOORM);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}
+    if(!S.floor.has((cx+1)+'_'+(ry))){const a=w2s(x+FLOORM,y),b=w2s(x+FLOORM,y+FLOORM);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1]);}}
   ctx.stroke();
 }
 function hexA(hex,a){const n=parseInt(hex.slice(1),16);return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;}
@@ -859,9 +861,9 @@ function setTool(t){tool=t;pending=null;
   document.getElementById('stTool').textContent='tool: '+t;
   renderToolOpts();cv.style.cursor=t==='pan'?'grab':'default';}
 function floorRect(cur){if(!drag)return null;const a=drag.start,b=cur;
-  const c0=Math.floor(Math.min(a.x,b.x)/GRIDM),c1=Math.ceil(Math.max(a.x,b.x)/GRIDM);
-  const r0=Math.floor(Math.min(a.y,b.y)/GRIDM),r1=Math.ceil(Math.max(a.y,b.y)/GRIDM);
-  return {x:c0*GRIDM,y:r0*GRIDM,w:(c1-c0)*GRIDM,h:(r1-r0)*GRIDM,c0,c1,r0,r1};}
+  const c0=Math.floor(Math.min(a.x,b.x)/FLOORM),c1=Math.ceil(Math.max(a.x,b.x)/FLOORM);
+  const r0=Math.floor(Math.min(a.y,b.y)/FLOORM),r1=Math.ceil(Math.max(a.y,b.y)/FLOORM);
+  return {x:c0*FLOORM,y:r0*FLOORM,w:(c1-c0)*FLOORM,h:(r1-r0)*FLOORM,c0,c1,r0,r1};}
 
 cv.addEventListener('pointerdown',e=>{
   cv.setPointerCapture(e.pointerId);
@@ -1062,17 +1064,27 @@ function renderToolOpts(){const el=document.getElementById('toolopts');el.innerH
     const f=document.createElement('button');f.className='tbtn ghost';f.textContent='Fill bounds';
     f.title='Fill the bounding box of existing floor';f.onclick=fillBounds;el.appendChild(f);
     const cl=document.createElement('button');cl.className='tbtn ghost';cl.textContent='Clear';cl.onclick=()=>{S.floor.clear();commit();draw();};el.appendChild(cl);
+    const cp=document.createElement('span');cp.className='pill';cp.textContent='Cell:';el.appendChild(cp);
+    [0.5,0.25,0.1].forEach(m=>{const b=document.createElement('button');b.className='tbtn'+(Math.abs(FLOORM-m)<1e-6?' active':'');
+      b.textContent=m+'m';b.title='Floor cell size — smaller = finer control';b.onclick=()=>setFloorRes(m);el.appendChild(b);});
   }
 }
 function fillBounds(){if(!S.floor.size)return;let c0=1e9,c1=-1e9,r0=1e9,r1=-1e9;
   S.floor.forEach(k=>{const [c,r]=k.split('_').map(Number);c0=Math.min(c0,c);c1=Math.max(c1,c);r0=Math.min(r0,r);r1=Math.max(r1,r);});
   for(let c=c0;c<=c1;c++)for(let r=r0;r<=r1;r++)S.floor.add(c+'_'+r);commit();draw();}
+/* re-grid the floor to a finer/coarser cell size (keeps the painted area) */
+function setFloorRes(m){if(Math.abs(m-FLOORM)<1e-6)return;
+  const ns=new Set();const span=Math.max(1,Math.round(FLOORM/m));
+  S.floor.forEach(k=>{const [c,r]=k.split('_').map(Number);
+    const nc0=Math.round(c*FLOORM/m),nr0=Math.round(r*FLOORM/m);
+    for(let i=0;i<span;i++)for(let j=0;j<span;j++)ns.add((nc0+i)+'_'+(nr0+j));});
+  S.floor=ns;FLOORM=m;commit();refreshUI();renderToolOpts();draw();}
 
 /* ============================================================ UI: PROPERTIES */
 const SWATCHES=['#e2624c','#3f6fb0','#6abf9b','#c9a23a','#8c93a0','#7a86d6','#d672a8','#5bb1c9','#444b55','#2a2a2a','#ffffff','#222222'];
 function refreshUI(){refreshProps();refreshLayers();updateSel();}
 function updateSel(){const el=document.getElementById('stSel');
-  el.textContent=sel.length?`${sel.length} selected`:`${S.objects.length} objects · ${S.areas.length} areas · ${S.walls.length} walls · floor ${(S.floor.size*GRIDM*GRIDM).toFixed(1)} m²`;}
+  el.textContent=sel.length?`${sel.length} selected`:`${S.objects.length} objects · ${S.areas.length} areas · ${S.walls.length} walls · floor ${(S.floor.size*FLOORM*FLOORM).toFixed(1)} m²`;}
 function field(label,inner){return `<div class="field"><label>${label}</label>${inner}</div>`;}
 function refreshProps(){const root=document.getElementById('props');const items=selItems();
   if(!items.length){root.innerHTML=`<div class="empty">Nothing selected.<br><br>Tap a palette item to drop it in the middle of the view, then drag it into place. Tap any object to edit it here.</div>`;return;}
@@ -1186,7 +1198,7 @@ function updateZoomLabel(){document.getElementById('zoomLabel').textContent=Math
 function fitView(){let c0=1e9,c1=-1e9,r0=1e9,r1=-1e9;
   if(S.floor.size){S.floor.forEach(k=>{const [c,r]=k.split('_').map(Number);c0=Math.min(c0,c);c1=Math.max(c1,c+1);r0=Math.min(r0,r);r1=Math.max(r1,r+1);});}
   else {c0=0;r0=0;c1=40;r1=24;}
-  const x0=c0*GRIDM,x1=c1*GRIDM,y0=r0*GRIDM,y1=r1*GRIDM;
+  const x0=c0*FLOORM,x1=c1*FLOORM,y0=r0*FLOORM,y1=r1*FLOORM;
   cam.x=(x0+x1)/2;cam.y=(y0+y1)/2;
   cam.zoom=Math.min(W()/((x1-x0)*1.1),H()/((y1-y0)*1.1));cam.zoom=Math.max(8,Math.min(120,cam.zoom));
   updateZoomLabel();draw();}
@@ -1195,7 +1207,7 @@ function exportJSON(){const blob=new Blob([serialize()],{type:'application/json'
 function exportPNG(){const tmp=document.createElement('canvas');const pad=40;
   let c0=1e9,c1=-1e9,r0=1e9,r1=-1e9;S.floor.forEach(k=>{const [c,r]=k.split('_').map(Number);c0=Math.min(c0,c);c1=Math.max(c1,c+1);r0=Math.min(r0,r);r1=Math.max(r1,r+1);});
   if(!S.floor.size){c0=0;r0=0;c1=40;r1=24;}
-  const sc=60;const wpx=(c1-c0)*GRIDM*sc+pad*2,hpx=(r1-r0)*GRIDM*sc+pad*2;
+  const sc=60;const wpx=(c1-c0)*FLOORM*sc+pad*2,hpx=(r1-r0)*FLOORM*sc+pad*2;
   tmp.width=wpx;tmp.height=hpx;const g=tmp.getContext('2d');
   // temporarily render via main draw routine into tmp by swapping
   const oc=ctx, ocam={...cam}, oW=W, oH=H;
@@ -1203,12 +1215,12 @@ function exportPNG(){const tmp=document.createElement('canvas');const pad=40;
   g.fillStyle='#f4f3ee';g.fillRect(0,0,wpx,hpx);
   const savedCtx=window.__ctx;
   // Simplest reliable path: draw scene to tmp with its own transform
-  renderTo(g,sc,c0*GRIDM-pad/sc,r0*GRIDM-pad/sc);
+  renderTo(g,sc,c0*FLOORM-pad/sc,r0*FLOORM-pad/sc);
   tmp.toBlob(b=>{const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='gym-layout.png';a.click();});
 }
 function renderTo(g,scale,ox,oy){ // ox,oy world coords at canvas 0,0
   const tx=(x,y)=>[(x-ox)*scale,(y-oy)*scale];
-  g.fillStyle='#fff';S.floor.forEach(k=>{const [c,r]=k.split('_').map(Number);const [sx,sy]=tx(c*GRIDM,r*GRIDM);g.fillRect(sx,sy,GRIDM*scale+1,GRIDM*scale+1);});
+  g.fillStyle='#fff';S.floor.forEach(k=>{const [c,r]=k.split('_').map(Number);const [sx,sy]=tx(c*FLOORM,r*FLOORM);g.fillRect(sx,sy,FLOORM*scale+1,FLOORM*scale+1);});
   S.areas.forEach(a=>{const [sx,sy]=tx(a.x,a.y);const aw=a.w*scale,ah=a.h*scale;g.save();g.translate(sx,sy);
     g.fillStyle=hexA(a.fill,a.op);g.fillRect(-aw/2,-ah/2,aw,ah);
     g.strokeStyle=hexA(a.fill,.9);g.lineWidth=2;if(a.dash)g.setLineDash([8,6]);g.strokeRect(-aw/2,-ah/2,aw,ah);g.setLineDash([]);
